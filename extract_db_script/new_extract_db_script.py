@@ -6,15 +6,12 @@ import sys
 import os
 import pandas as pd
 from pandas.io.json import json_normalize
-from gevent.pool import Pool
+from urllib import request
 import numpy as np
-# FILEPATH = os.path.dirname(os.path.abspath(__file__))
-# DIRPATH = os.path.abspath(os.path.join(FILEPATH, os.pardir))
-# BDPATH = os.path.join(DIRPATH, 'bd')
-# MNPATH = os.path.join(DIRPATH, 'mushroomDBDone.data')
-# ALLNAMEPATH = os.path.join(DIRPATH, 'mushroomNames.data')
-# MUSHROOMDB = []
-# MUSHROOMALLNAMES = []
+
+FILEPATH = os.path.dirname(os.path.abspath(__file__))
+DIRPATH = os.path.abspath(os.path.join(FILEPATH, os.pardir))
+BDPATH = os.path.join(DIRPATH, 'bd2')
 
 """
  URL from mushroom observer api which returns a json file filled by
@@ -34,7 +31,7 @@ class ExtractName:
         while j <= self.length:
             # Get the HTTPS response
             response = session.get(
-                'https://mushroomobserver.org/api/names?&misspellings&=no&is_deprecated=False&detail=low&page=%s&format=json' % (j,)
+                'https://mushroomobserver.org/api/names?&misspellings=no&is_deprecated=False&detail=low&page=%s&format=json' % (j,)
                 )
             # Extract the HTTPS response in json format
             responseJson = transformInJson(response)
@@ -56,7 +53,7 @@ class ExtractImage:
         self.length = length
         self.session = session
 
-    def imageExtraction(self):
+    def urlExtraction(self):
         k=0
         url = []
         if self.length:
@@ -66,13 +63,19 @@ class ExtractImage:
                 responseJson = transformInJson(response)
                 try:
                     responseJsonResults = responseJson['results']
+                    newDir = os.path.abspath(os.path.join(BDPATH, self.name))
+                    if not os.path.exists(newDir):
+                        os.mkdir(newDir)
                     for id in responseJsonResults:
-                        url.append("https://images.mushroomobserver.org/320/%s.jpg" % id)
-                        # imgData = requests.get(url).content
-                        # filename = os.path.join(self.newDir, url.split('/')[-1])
-                        # if not os.path.exists(filename):
-                        #     with open(filename, 'wb') as image:
-                        #         image.write(imgData)
+                        image_url = "https://images.mushroomobserver.org/320/%s.jpg" % id
+                        filename = image_url.split('/')[-1]
+                        savePath = os.path.join(newDir, filename)
+                        if not os.path.exists(savePath):
+                            request.urlretrieve(
+                                image_url, os.path.join(
+                                    newDir,
+                                    image_url.split('/')[-1]))
+                        url.append(image_url)
                         k += 1
                         updateProgress(
                             "Extracting {}".format(
@@ -83,9 +86,7 @@ class ExtractImage:
                     return np.nan
             else:
                 return np.nan
-#
-#
-#
+
 def transformInJson(response):
     return response.json()
 
@@ -93,11 +94,11 @@ def getPageNumber(session, URL):
     response = session.get(URL)
     responseJson = response.json()
     try:
-        length = 1
+        length = responseJson['number_of_pages']
     except:
         length = False
     return length
-#
+
 def updateProgress(job, progress):
     length = 20
     block = int(round(length*progress))
@@ -107,61 +108,19 @@ def updateProgress(job, progress):
     sys.stdout.write(message)
     sys.stdout.flush()
 
-# def saveData(filename, object):
-#     with open(filename, 'wb') as file:
-#         pickle.dump(object, file)
-#
-# def loadData(filename):
-#     with open(filename, 'rb') as file:
-#         return pickle.load(file)
-
 if __name__ == "__main__":
+    if not os.path.exists(BDPATH):
+        os.mkdir(BDPATH)
     session = requests.Session()
     numberOfNamesPages = getPageNumber(session, URLNAME)
     Extraction = ExtractName(session, numberOfNamesPages)
     name = Extraction.nameExtraction()
     name.drop_duplicates(subset='name', inplace=True)
     name = name.iloc[:5]
-    print(name)
-    name.to_csv('test.csv')
+
     name['image_url'] = name.apply(
         lambda row: ExtractImage(getPageNumber(
             session,
             'https://mushroomobserver.org/api/images?&name=%s&format=json' % row['name']),
-                                 row['name'], session).imageExtraction(), axis=1)
-    print(name[['name', 'image_url']])
-    # if not os.path.exists(BDPATH):
-    #     os.mkdir(BDPATH)
-    #
-    # if os.path.exists(MNPATH):
-    #     MUSHROOMDB = loadData(MNPATH)
-    #
-    # if os.path.exists(ALLNAMEPATH):
-    #     MUSHROOMALLNAMES = loadData(ALLNAMEPATH)
-    #
-    # if not MUSHROOMALLNAMES:
-    #     numberOfNamesPages = getPageNumber(URLNAME)
-    #     Extraction = ExtractName(numberOfNamesPages)
-    #     nameExtracts = Extraction.nameExtraction()
-    #     uniqueNames = removeDuplicate(nameExtracts)
-    #     saveData('mushroomNames.data', uniqueNames)
-    # else:
-    #
-    #     if MUSHROOMDB:
-    #         uniqueNames = list(set(MUSHROOMALLNAMES) - set(MUSHROOMDB))
-    #     else:
-    #         uniqueNames = MUSHROOMALLNAMES
-    # try:
-    #     for name in uniqueNames:
-    #         try:
-    #             imageURL = 'https://mushroomobserver.org/api/images?&name=%s&format=json' % name
-    #             numberOfImagesPages = getPageNumber(imageURL)
-    #             image = ExtractImage(name, numberOfImagesPages)
-    #             image.imageExtraction()
-    #             MUSHROOMDB.append(name)
-    #         except Exception as e:
-    #             print(e)
-    # except KeyboardInterrupt:
-    #     saveData('mushroomDBDone.data', MUSHROOMDB)
-    #
-    # saveData('mushroomDBDone.data', MUSHROOMDB)
+                                 row['name'], session).urlExtraction(), axis=1)
+    name.to_csv('test.csv')
