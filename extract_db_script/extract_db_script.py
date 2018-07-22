@@ -8,10 +8,16 @@ import os
 FILEPATH = os.path.dirname(os.path.abspath(__file__))
 DIRPATH = os.path.abspath(os.path.join(FILEPATH, os.pardir))
 BDPATH = os.path.join(DIRPATH, 'bd')
+MNPATH = os.path.join(DIRPATH, 'mushroomNames.txt')
+MUSHROOMNAMES = []
+
 if not os.path.exists(BDPATH):
     os.mkdir(BDPATH)
 
-
+if os.path.exists(MNPATH):
+    msname = open(MNPATH, 'r')
+    MUSHROOMNAMES = msname.readlines()
+    del MUSHROOMNAMES[-1]
 """
  URL from mushroom observer api which returns a json file filled by
  mushroom names
@@ -44,34 +50,38 @@ class ExtractName:
         return mushroomNames
 
 class ExtractImage:
-    def __init__(self, name):
+    def __init__(self, name, length):
         self.name = name
+        self.length = length
         self.newDir = os.path.abspath(os.path.join(BDPATH, self.name))
         if not os.path.exists(self.newDir):
             os.mkdir(self.newDir)
 
 
     def imageExtraction(self):
-        imageURL = 'https://mushroomobserver.org/api/images?&name=%s&format=json' % self.name
-        response = requests.get(imageURL)
-        responseJson = transformInJson(response)
-        try:
-            k=0
-            responseJsonResults = responseJson['results']
-            for id in responseJsonResults:
-                url = "https://mushroomobserver.nyc3.digitaloceanspaces.com/orig/%s.jpg" % id
-                imgData = requests.get(url).content
-                filename = os.path.join(self.newDir, url.split('/')[-1])
-                if not os.path.exists(filename):
-                    with open(filename, 'wb') as image:
-                        image.write(imgData)
-                updateProgress(
-                    "Extracting {}".format(
-                        self.name),
-                    k/responseJson['number_of_records'])
-                k +=1
-        except Exception as e:
-            print(e)
+        k=0
+        for page in self.length:
+            imageURL = 'https://mushroomobserver.org/api/images?&name=%s&page=%s&format=json' % self.name, page
+            response = requests.get(imageURL)
+            responseJson = transformInJson(response)
+            pageLength = responseJson['number_of_pages']
+            try:
+
+                responseJsonResults = responseJson['results']
+                for id in responseJsonResults[0:5]:
+                    url = "https://images.mushroomobserver.org/320/%s.jpg" % id
+                    imgData = requests.get(url).content
+                    filename = os.path.join(self.newDir, url.split('/')[-1])
+                    if not os.path.exists(filename):
+                        with open(filename, 'wb') as image:
+                            image.write(imgData)
+                    updateProgress(
+                        "Extracting {}".format(
+                            self.name),
+                        k/responseJson['number_of_records'])
+                    k +=1
+            except Exception as e:
+                print(e)
 
 
 
@@ -79,7 +89,10 @@ def transformInJson(response):
     return response.json()
 
 def removeDuplicate(List):
-    getUnique = set(List)
+    if MUSHROOMNAMES:
+        getUnique = (set(List) - set(MUSHROOMNAMES))
+    else:
+        getUnique = set(List)
     return list(getUnique)
 
 def getPageNumber(URL):
@@ -102,8 +115,14 @@ if __name__ == "__main__":
     Extraction = ExtractName(numberOfNamesPages)
     nameExtracts = Extraction.nameExtraction()
     uniqueNames = removeDuplicate(nameExtracts)
-    with open('mushroomNames.txt', 'w') as f:
-        f.write("\n".join(uniqueNames))
-    for name in uniqueNames:
-        image = ExtractImage(name)
-        image.imageExtraction()
+    file = open('mushroomNames.txt', 'w')
+    try:
+        for name in uniqueNames:
+            imageURL = 'https://mushroomobserver.org/api/images?&name=%s&format=json' % name
+            numberOfImagesPages = getPageNumber(imageURL)
+            image = ExtractImage(name, numberOfImagesPages)
+            image.imageExtraction()
+            file.write('%s\n' % name)
+    except KeyboardInterrupt:
+        file.close()
+    file.close()
