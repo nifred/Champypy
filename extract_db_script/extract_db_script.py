@@ -4,20 +4,27 @@ import requests
 import json
 import sys
 import os
+import shutil
 
 FILEPATH = os.path.dirname(os.path.abspath(__file__))
 DIRPATH = os.path.abspath(os.path.join(FILEPATH, os.pardir))
 BDPATH = os.path.join(DIRPATH, 'bd')
 MNPATH = os.path.join(DIRPATH, 'mushroomNames.txt')
+ALLNAMEPATH = os.path.join(DIRPATH, 'allNames.txt')
 MUSHROOMNAMES = []
-
+MUSHROOMALLNAMES = []
 if not os.path.exists(BDPATH):
     os.mkdir(BDPATH)
 
 if os.path.exists(MNPATH):
     msname = open(MNPATH, 'r')
     MUSHROOMNAMES = msname.readlines()
-    del MUSHROOMNAMES[-1]
+    if MUSHROOMNAMES:
+        del MUSHROOMNAMES[-1]
+
+if os.path.exists(ALLNAMEPATH):
+    allname = open(ALLNAMEPATH, 'r')
+    MUSHROOMALLNAMES = allname.readlines()
 """
  URL from mushroom observer api which returns a json file filled by
  mushroom names
@@ -60,7 +67,7 @@ class ExtractImage:
 
     def imageExtraction(self):
         k=0
-        for page in self.length:
+        for page in range(1, self.length+1):
             imageURL = 'https://mushroomobserver.org/api/images?&name=%s&page=%s&format=json' % self.name, page
             response = requests.get(imageURL)
             responseJson = transformInJson(response)
@@ -68,7 +75,7 @@ class ExtractImage:
             try:
 
                 responseJsonResults = responseJson['results']
-                for id in responseJsonResults[0:5]:
+                for id in responseJsonResults:
                     url = "https://images.mushroomobserver.org/320/%s.jpg" % id
                     imgData = requests.get(url).content
                     filename = os.path.join(self.newDir, url.split('/')[-1])
@@ -98,6 +105,7 @@ def removeDuplicate(List):
 def getPageNumber(URL):
     response = requests.get(URL)
     responseJson = response.json()
+    print(responseJson)
     length = responseJson['number_of_pages']
     return 1
 
@@ -111,18 +119,25 @@ def updateProgress(job, progress):
     sys.stdout.flush()
 
 if __name__ == "__main__":
-    numberOfNamesPages = getPageNumber(URLNAME)
-    Extraction = ExtractName(numberOfNamesPages)
-    nameExtracts = Extraction.nameExtraction()
-    uniqueNames = removeDuplicate(nameExtracts)
-    file = open('mushroomNames.txt', 'w')
+    if not MUSHROOMALLNAMES:
+        numberOfNamesPages = getPageNumber(URLNAME)
+        Extraction = ExtractName(numberOfNamesPages)
+        nameExtracts = Extraction.nameExtraction()
+        uniqueNames = removeDuplicate(nameExtracts)
+        file = open('mushroomNames.txt', 'w')
+    else:
+        uniqueNames = MUSHROOMALLNAMES
     try:
         for name in uniqueNames:
-            imageURL = 'https://mushroomobserver.org/api/images?&name=%s&format=json' % name
-            numberOfImagesPages = getPageNumber(imageURL)
-            image = ExtractImage(name, numberOfImagesPages)
-            image.imageExtraction()
-            file.write('%s\n' % name)
+            try:
+                imageURL = 'https://mushroomobserver.org/api/images?&name=%s&format=json' % name
+                numberOfImagesPages = getPageNumber(imageURL)
+                image = ExtractImage(name, numberOfImagesPages)
+                image.imageExtraction()
+                file.write('%s\n' % name)
+            except:
+                pass
     except KeyboardInterrupt:
         file.close()
     file.close()
+    shutil.copyfile('mushroomNames.txt', 'allName.txt')
