@@ -13,16 +13,6 @@ MNPATH = os.path.join(DIRPATH, 'mushroomDBDone.data')
 ALLNAMEPATH = os.path.join(DIRPATH, 'mushroomNames.data')
 MUSHROOMDB = []
 MUSHROOMALLNAMES = []
-if not os.path.exists(BDPATH):
-    os.mkdir(BDPATH)
-
-if os.path.exists(MNPATH):
-    MUSHROOMDB = loadData(MNPATH)
-    if MUSHROOMDB:
-        del MUSHROOMDB[-1]
-
-if os.path.exists(ALLNAMEPATH):
-    MUSHROOMALLNAMES = loadData(ALLNAMEPATH)
 
 """
  URL from mushroom observer api which returns a json file filled by
@@ -37,20 +27,19 @@ class ExtractName:
 
     def nameExtraction(self):
         j=1
+        mushroomNames = []
         while j <= self.length:
             # Get the HTTPS response
             response = requests.get(
-                'https://mushroomobserver.org/api/names?&detail=high&page=%s&format=json' % j
+                'https://mushroomobserver.org/api/names?&misspellings&=no&is_deprecated=False&detail=high&page=%s&format=json' % (j,)
                 )
             # Extract the HTTPS response in json format
             responseJson = transformInJson(response)
             # Extract the response results tag
             responseJsonResults = responseJson['results']
             # Initialize mushroomNames list to get mushroom name from API
-            mushroomNames = []
             for mushroom in responseJsonResults:
-                if not (mushroom['deprecated'] or mushroom['misspelled']):
-                    mushroomNames.append(mushroom['name'].lower())
+                mushroomNames.append(mushroom['name'].lower())
             updateProgress("Extracting mushroom names", j/self.length)
             j +=1
         return mushroomNames
@@ -67,12 +56,11 @@ class ExtractImage:
     def imageExtraction(self):
         k=0
         for page in range(1, self.length+1):
-            imageURL = 'https://mushroomobserver.org/api/images?&name=%s&page=%s&format=json' % self.name, page
+            imageURL = 'https://mushroomobserver.org/api/images?&name=%s&page=%s&format=json' % (self.name, page)
             response = requests.get(imageURL)
             responseJson = transformInJson(response)
             pageLength = responseJson['number_of_pages']
             try:
-
                 responseJsonResults = responseJson['results']
                 for id in responseJsonResults:
                     url = "https://images.mushroomobserver.org/320/%s.jpg" % id
@@ -81,11 +69,11 @@ class ExtractImage:
                     if not os.path.exists(filename):
                         with open(filename, 'wb') as image:
                             image.write(imgData)
+                    k +=1
                     updateProgress(
                         "Extracting {}".format(
                             self.name),
                         k/responseJson['number_of_records'])
-                    k +=1
             except Exception as e:
                 print(e)
 
@@ -122,6 +110,15 @@ def loadData(filename):
         return pickle.load(file)
 
 if __name__ == "__main__":
+    if not os.path.exists(BDPATH):
+        os.mkdir(BDPATH)
+
+    if os.path.exists(MNPATH):
+        MUSHROOMDB = loadData(MNPATH)
+
+    if os.path.exists(ALLNAMEPATH):
+        MUSHROOMALLNAMES = loadData(ALLNAMEPATH)
+
     if not MUSHROOMALLNAMES:
         numberOfNamesPages = getPageNumber(URLNAME)
         Extraction = ExtractName(numberOfNamesPages)
@@ -142,8 +139,8 @@ if __name__ == "__main__":
                 image = ExtractImage(name, numberOfImagesPages)
                 image.imageExtraction()
                 MUSHROOMDB.append(name)
-            except:
-                pass
+            except Exception as e:
+                print(e)
     except KeyboardInterrupt:
         saveData('mushroomDBDone.data', MUSHROOMDB)
 
