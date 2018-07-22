@@ -4,27 +4,26 @@ import requests
 import json
 import sys
 import os
-import shutil
+import pickle
 
 FILEPATH = os.path.dirname(os.path.abspath(__file__))
 DIRPATH = os.path.abspath(os.path.join(FILEPATH, os.pardir))
 BDPATH = os.path.join(DIRPATH, 'bd')
-MNPATH = os.path.join(DIRPATH, 'mushroomNames.txt')
-ALLNAMEPATH = os.path.join(DIRPATH, 'allNames.txt')
-MUSHROOMNAMES = []
+MNPATH = os.path.join(DIRPATH, 'mushroomDBDone.data')
+ALLNAMEPATH = os.path.join(DIRPATH, 'mushroomNames.data')
+MUSHROOMDB = []
 MUSHROOMALLNAMES = []
 if not os.path.exists(BDPATH):
     os.mkdir(BDPATH)
 
 if os.path.exists(MNPATH):
-    msname = open(MNPATH, 'r')
-    MUSHROOMNAMES = msname.readlines()
-    if MUSHROOMNAMES:
-        del MUSHROOMNAMES[-1]
+    MUSHROOMDB = loadData(MNPATH)
+    if MUSHROOMDB:
+        del MUSHROOMDB[-1]
 
 if os.path.exists(ALLNAMEPATH):
-    allname = open(ALLNAMEPATH, 'r')
-    MUSHROOMALLNAMES = allname.readlines()
+    MUSHROOMALLNAMES = loadData(ALLNAMEPATH)
+
 """
  URL from mushroom observer api which returns a json file filled by
  mushroom names
@@ -96,18 +95,14 @@ def transformInJson(response):
     return response.json()
 
 def removeDuplicate(List):
-    if MUSHROOMNAMES:
-        getUnique = (set(List) - set(MUSHROOMNAMES))
-    else:
-        getUnique = set(List)
+    getUnique = set(List)
     return list(getUnique)
 
 def getPageNumber(URL):
     response = requests.get(URL)
     responseJson = response.json()
-    print(responseJson)
     length = responseJson['number_of_pages']
-    return 1
+    return length
 
 def updateProgress(job, progress):
     length = 20
@@ -118,15 +113,27 @@ def updateProgress(job, progress):
     sys.stdout.write(message)
     sys.stdout.flush()
 
+def saveData(filename, object):
+    with open(filename, 'wb') as file:
+        pickle.dump(object, file)
+
+def loadData(filename):
+    with open(filename, 'rb') as file:
+        return pickle.load(file)
+
 if __name__ == "__main__":
     if not MUSHROOMALLNAMES:
         numberOfNamesPages = getPageNumber(URLNAME)
         Extraction = ExtractName(numberOfNamesPages)
         nameExtracts = Extraction.nameExtraction()
         uniqueNames = removeDuplicate(nameExtracts)
-        file = open('mushroomNames.txt', 'w')
+        saveData('mushroomNames.data', uniqueNames)
     else:
-        uniqueNames = MUSHROOMALLNAMES
+
+        if MUSHROOMDB:
+            uniqueNames = list(set(MUSHROOMALLNAMES) - set(MUSHROOMDB))
+        else:
+            uniqueNames = MUSHROOMALLNAMES
     try:
         for name in uniqueNames:
             try:
@@ -134,10 +141,10 @@ if __name__ == "__main__":
                 numberOfImagesPages = getPageNumber(imageURL)
                 image = ExtractImage(name, numberOfImagesPages)
                 image.imageExtraction()
-                file.write('%s\n' % name)
+                MUSHROOMDB.append(name)
             except:
                 pass
     except KeyboardInterrupt:
-        file.close()
-    file.close()
-    shutil.copyfile('mushroomNames.txt', 'allName.txt')
+        saveData('mushroomDBDone.data', MUSHROOMDB)
+
+    saveData('mushroomDBDone.data', MUSHROOMDB)
