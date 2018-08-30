@@ -13,7 +13,7 @@ from extract_mushroom_image import main
 # Constant pathname
 FILEPATH = os.path.dirname(os.path.abspath(__file__))
 DIRPATH = os.path.abspath(FILEPATH)
-
+LIST = os.path.join(FILEPATH, 'mushroom_selectionned_list.json')
 # function that gets url to be used in mushroom observer api
 def get_url(name):
     url = "https://mushroomobserver.org/api/"\
