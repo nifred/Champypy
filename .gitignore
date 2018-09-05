@@ -104,3 +104,4 @@ venv.bak/
 .mypy_cache/
 db/
 mushroom_list_img_url.csv
+dataset.csv
