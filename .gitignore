@@ -105,3 +105,10 @@ venv.bak/
 db/
 mushroom_list_img_url.csv
 dataset.csv
+bd/
+bd2/
+createDataset.py
+*.data
+*.csv
+extract_db_script/
+last.txt
